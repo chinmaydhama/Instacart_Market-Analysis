@@ -15,9 +15,10 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import scipy.stats as stats
 import numpy as np
+import zipfile
 
-
-# Load the data
+with zipfile.ZipFile('final_data_instacart_400k.zip', 'r') as zip_ref:
+    zip_ref.extractall()
 df_sliced = pd.read_csv('final_data_instacart_400k.csv')
 df=df_sliced.copy()
 data=df.copy()
