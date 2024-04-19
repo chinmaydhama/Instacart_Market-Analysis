@@ -11,8 +11,12 @@ from scipy.stats import probplot, shapiro, kstest, anderson, normaltest
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 import scipy.stats as stats
 import numpy as np
+
+
 # Load the data
 df_sliced = pd.read_csv('final_data_instacart_400k.csv')
 df=df_sliced.copy()
@@ -36,16 +40,24 @@ df_sliced['department_id'] = df_sliced['department_id'].map(department_dict)
 # Create a Dash application
 app = dash.Dash(__name__,suppress_callback_exceptions=True)
 
+# Get the unique aisle names for the dropdown
 aisle_names = df_sliced['aisle_id'].unique()
 total_customers = df['order_id'].nunique()
 total_products = df['product_id'].nunique()
 avg_order_per_customer = df['product_id'].count() / total_customers
 avg_order_per_customer = round(avg_order_per_customer, 2)
 Total_orders = df['order_id'].count()
+
+# Without a specific definition of "churn" or a time frame to consider, it's not possible to calculate churn %
+# For the purpose of this example, let's assume that churn % is 0
 churn_percentage = 0
+
+# Align the calculated metrics with dummy_values
 dummy_values = [total_customers, total_products, avg_order_per_customer, Total_orders]
 
 
+
+# Initialize the Dash app with external stylesheets
 external_stylesheets = ['https://use.fontawesome.com/releases/v5.8.1/css/all.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
@@ -85,8 +97,7 @@ app.layout = html.Div(children=[
             'display': 'inline-block',
             'minWidth': '200px'
         }) for icon, value, description in zip(icons, dummy_values, descriptions)
-    ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'space-around', 'flexWrap': 'wrap',
-              'background': '#f3f4f6', 'padding': '20px'}),
+    ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'space-around', 'flexWrap': 'wrap'}),
 
     dcc.Tabs(id='tabs', value='tab-1', children=[
         dcc.Tab(label='Department Analysis', value='tab-1'),
@@ -95,7 +106,8 @@ app.layout = html.Div(children=[
         dcc.Tab(label='Statistical Analysis', value='tab-4')
     ]),
     html.Div(id='tabs-content')
-], style={'backgroundColor': '#EFEFEF'})  # General background color
+])
+
 
 @app.callback(Output('tabs-content', 'children'),
               Input('tabs', 'value'))
@@ -104,8 +116,8 @@ def render_content(tab):
         return html.Div([
             dcc.Dropdown(
                 id='department-dropdown',
-                options=[{'label': i, 'value': i} for i in df_sliced['department_id']],
-                value=df_sliced['department_id'][0]  # default value
+                options=[{'label': i, 'value': i} for i in df_sliced['department_id'].unique()],
+                value=df_sliced['department_id'].unique()[0]  # default value
             ),
             dcc.RadioItems(
                 id='top-n-radio',
@@ -488,20 +500,23 @@ def update_graph(selected_feature, test_type, n_value):
      Input('transformation-type', 'value')]
 )
 def update_transformed_data(selected_feature, transformation):
-    transformed = df[selected_feature]
+    
     if transformation == 'log':
-        transformed = np.log(transformed + 1)
-    elif transformation == 'sqrt':
-        transformed = np.sqrt(transformed)
-    fig = px.histogram(transformed, nbins=30, title="Data Transformation")
+        transformation  = np.log(transformation + 1)
+    elif transformation  == 'sqrt':
+        transformation  = np.sqrt(transformation )
+    fig = px.histogram(transformation , nbins=30, title="Data Transformation")
     return fig
+
+# Precompute the correlation matrix
+corr_matrix = df[numeric_cols].corr()
 
 @app.callback(
     Output('correlation-heatmap', 'figure'),
     Input('transformation-type', 'value')
 )
 def update_heatmap(value):
-    corr_matrix = df[numeric_cols].corr()
+    # Use the precomputed correlation matrix
     fig = px.imshow(corr_matrix, text_auto=True, labels={'color': "Correlation"}, title="Correlation Heatmap")
     return fig
 
@@ -522,13 +537,31 @@ def update_graph(xaxis_column_name, yaxis_column_name, trend_line_value):
         trendline="ols" if 'show' in trend_line_value else None
     )
 
+    # Get r-squared value if trend line is shown
     r_squared = ""
     if 'show' in trend_line_value:
         results = px.get_trendline_results(fig)
         r_squared = f"R-squared: {results.px_fit_results.iloc[0].rsquared:.3f}"
 
+        # Modify trend line to start from 0
+        if 'start_from_zero' in trend_line_value:
+            fig.update_traces(
+                line=dict(dash='dash'),
+                selector=dict(type='scatter', mode='lines')
+            )
+            fig.update_layout(yaxis=dict(range=[0, fig.data[0].y.max()]))
+
+        # Add R-squared value to the plot
+        fig.add_annotation(
+            x=0.5,
+            y=0.9,
+            text=r_squared,
+            showarrow=False,
+            font=dict(size=12)
+        )
+
     return fig, r_squared
 
 # Run the app
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=False)  # Set debug=False for production
