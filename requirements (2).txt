@@ -1,0 +1,6 @@
+pandas>=0.1
+dash>=0.1
+plotly>=0.1
+scipy>=0.1
+scikit-learn>=0.1
+numpy>=0.1
