@@ -1,0 +1,265 @@
+/* Instacart Dashboard - Production-grade theme */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+:root {
+  --bg-page: #f5f9f5;
+  --bg-card: #ffffff;
+  --border: #e2e8f0;
+  --primary: #0AAD05;
+  --primary-dark: #003D29;
+  --accent: #FF7009;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+  --shadow-lg: 0 10px 40px -10px rgba(0,0,0,.15);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+  background: var(--bg-page) !important;
+  color: var(--text) !important;
+  margin: 0;
+  padding: 0;
+}
+
+#main-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Header - Instacart green */
+.dash-header {
+  background: linear-gradient(135deg, #003D29 0%, #0AAD05 100%);
+  color: white;
+  padding: 28px 32px;
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.dash-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.dash-header p {
+  margin: 6px 0 0 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+/* KPI cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.kpi-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.kpi-card .kpi-icon {
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.kpi-card .kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.kpi-card .kpi-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* Tabs */
+._dash-app-content {
+  padding: 0 !important;
+}
+
+[data-dash-is-loading="true"] {
+  opacity: 0.7;
+}
+
+/* Tab container */
+.Tab-container {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.Tab-container .tab-content-inner {
+  padding: 24px;
+}
+
+/* Tab styling override */
+.rc-tabs {
+  border: none !important;
+}
+
+.rc-tabs-tab {
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 500 !important;
+  padding: 12px 20px !important;
+}
+
+.rc-tabs-tab-active {
+  color: var(--primary) !important;
+}
+
+.rc-tabs-ink-bar {
+  background: #0AAD05 !important;
+  height: 3px !important;
+}
+
+.rc-tabs-nav {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--bg-card);
+  padding: 0 16px;
+}
+
+/* Controls */
+.control-panel {
+  background: var(--bg-page);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.control-panel .Select-control,
+.control-panel .dcc_dropdown {
+  min-width: 200px;
+}
+
+.control-panel label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+/* Metric strips (department stats) */
+.metric-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.metric-strip .metric-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* Chart containers */
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.chart-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-row .chart-card {
+  flex: 1 1 calc(50% - 10px);
+  min-width: 320px;
+}
+
+/* Graph container */
+.dcc_Graph {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Buttons - Instacart green */
+.dash-button {
+  background: #0AAD05 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 10px 20px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+.dash-button:hover {
+  background: #003D29 !important;
+}
+
+/* Radio items / checklist */
+.dcc-radio label,
+.dcc-checklist label {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 0.9rem !important;
+}
+
+/* Slider */
+.rc-slider-track {
+  background: #0AAD05 !important;
+}
+
+.rc-slider-handle {
+  border-color: #0AAD05 !important;
+}
+
+/* Section titles */
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}

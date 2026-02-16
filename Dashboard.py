@@ -2,6 +2,7 @@ import pandas as pd
 import dash
 from dash.dependencies import Input, Output
 from dash import dcc, html
+from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
@@ -16,9 +17,11 @@ import plotly.graph_objects as go
 import scipy.stats as stats
 import numpy as np
 import zipfile
+import os
 
-with zipfile.ZipFile('final_data_instacart_400k.zip', 'r') as zip_ref:
-    zip_ref.extractall()
+if os.path.exists('final_data_instacart_400k.zip'):
+    with zipfile.ZipFile('final_data_instacart_400k.zip', 'r') as zip_ref:
+        zip_ref.extractall()
 df_sliced = pd.read_csv('final_data_instacart_400k.csv')
 df=df_sliced.copy()
 data=df.copy()
@@ -38,9 +41,6 @@ df_standardized = StandardScaler().fit_transform(df[numeric_cols])
 # Replace the department IDs with the corresponding department names
 df_sliced['department_id'] = df_sliced['department_id'].map(department_dict)
 
-# Create a Dash application
-app = dash.Dash(__name__,suppress_callback_exceptions=True)
-
 # Get the unique aisle names for the dropdown
 aisle_names = df_sliced['aisle_id'].unique()
 total_customers = df['order_id'].nunique()
@@ -48,65 +48,74 @@ total_products = df['product_id'].nunique()
 avg_order_per_customer = df['product_id'].count() / total_customers
 avg_order_per_customer = round(avg_order_per_customer, 2)
 Total_orders = df['order_id'].count()
-
-# Without a specific definition of "churn" or a time frame to consider, it's not possible to calculate churn %
-# For the purpose of this example, let's assume that churn % is 0
-churn_percentage = 0
-
-# Align the calculated metrics with dummy_values
 dummy_values = [total_customers, total_products, avg_order_per_customer, Total_orders]
 
+# Instacart brand colors
+INSTACART_GREEN = "#0AAD05"
+INSTACART_ORANGE = "#FF7009"
+INSTACART_DARK_GREEN = "#003D29"
+INSTACART_GREEN_LIGHT = "#7ED957"
+INSTACART_ORANGE_LIGHT = "#FFB380"
 
+# Plotly theme: Instacart-aligned, clean
+PLOT_TEMPLATE = dict(
+    layout=dict(
+        font=dict(family="DM Sans, system-ui, sans-serif", size=12, color="#0f172a"),
+        title=dict(font=dict(size=16, color="#0f172a"), x=0.02, xanchor="left"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#f8fafc",
+        margin=dict(t=56, b=48, l=56, r=32),
+        hoverlabel=dict(bgcolor="#fff", font_size=12, font_family="DM Sans"),
+        xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zeroline=False, tickfont=dict(size=11)),
+        yaxis=dict(showgrid=True, gridcolor="#e2e8f0", zeroline=False, tickfont=dict(size=11)),
+        colorway=[INSTACART_GREEN, INSTACART_ORANGE, INSTACART_DARK_GREEN, INSTACART_GREEN_LIGHT, INSTACART_ORANGE_LIGHT, "#64748b"],
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=11)),
+    )
+)
 
-# Initialize the Dash app with external stylesheets
-external_stylesheets = ['https://use.fontawesome.com/releases/v5.8.1/css/all.css']
+def apply_theme(fig, height=None):
+    """Apply production-grade theme to a Plotly figure."""
+    fig.update_layout(**PLOT_TEMPLATE["layout"])
+    if height:
+        fig.update_layout(height=height)
+    try:
+        fig.update_traces(marker=dict(line=dict(width=0)), selector=dict(type="bar"))
+    except Exception:
+        pass
+    return fig
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+icons = ["fa-users", "fa-box-open", "fa-shopping-cart", "fa-chart-line"]
+descriptions = ["Total Customers", "Total Products", "Avg Order per Customer", "Total Orders"]
 
-# Define the icons you want to use (Font Awesome classes)
-icons = [
-    "fa-users",  # For Total Customers
-    "fa-box-open",  # For Total Products
-    "fa-shopping-cart",  # For Avg Order per customer
-    "fa-chart-line"  # For Churn %
-]
+# Single Dash app with external stylesheets (assets/styles.css is auto-loaded from assets/)
+app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[
+    "https://use.fontawesome.com/releases/v5.8.1/css/all.css",
+])
 
-# Text descriptions for each metric
-descriptions = [
-    "Total Customers",
-    "Total Products",
-    "Avg Order per customer",
-    "Total Orders"
-]
-
-app.layout = html.Div(children=[
-    html.H1(children='Instacart-Grocery-Market-Analysis', style={'textAlign': 'center'}),
-
-    # Display dummy values in styled boxes with icons
-    html.Div(children=[
-        html.Div(children=[
-            html.I(className=f"fas {icon}", style={'fontSize': '24px', 'color': '#FF8C00'}),
-            html.P(str(value), style={'fontSize': '28px', 'fontWeight': 'bold'}),
-            html.P(description, style={'fontSize': '15px'})
-        ], style={
-            'border': '1px solid #ddd',
-            'borderLeft': '5px solid #FF8C00',
-            'borderRadius': '5px',
-            'padding': '5px 10px',
-            'margin': '10px',
-            'textAlign': 'center',
-            'display': 'inline-block',
-            'minWidth': '200px'
-        }) for icon, value, description in zip(icons, dummy_values, descriptions)
-    ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'space-around', 'flexWrap': 'wrap'}),
-
-    dcc.Tabs(id='tabs', value='tab-1', children=[
-        dcc.Tab(label='Department Analysis', value='tab-1'),
-        dcc.Tab(label='Aisle Analysis', value='tab-2'),
-        dcc.Tab(label='Product Insights Dashboard', value='tab-3'),
-        dcc.Tab(label='Statistical Analysis', value='tab-4')
+app.layout = html.Div(id="main-container", children=[
+    html.Header(className="dash-header", children=[
+        html.H1("Instacart Market Analysis"),
+        html.P("Grocery basket analytics, department & aisle performance, and statistical insights"),
     ]),
-    html.Div(id='tabs-content')
+
+    html.Div(className="kpi-grid", children=[
+        html.Div(className="kpi-card", children=[
+            html.I(className=f"fas {icon} kpi-icon"),
+            html.Div(str(value), className="kpi-value"),
+            html.Div(description, className="kpi-label"),
+        ]) for icon, value, description in zip(icons, dummy_values, descriptions)
+    ]),
+
+    html.Div(className="Tab-container", children=[
+        dcc.Tabs(id="tabs", value="tab-1", children=[
+            dcc.Tab(label="Department Analysis", value="tab-1"),
+            dcc.Tab(label="Aisle Analysis", value="tab-2"),
+            dcc.Tab(label="Product Insights", value="tab-3"),
+            dcc.Tab(label="Statistical Analysis", value="tab-4"),
+        ]),
+        html.Div(id="tabs-content", className="tab-content-inner"),
+    ]),
 ])
 
 
@@ -115,250 +124,257 @@ app.layout = html.Div(children=[
 def render_content(tab):
     if tab == 'tab-1':
         return html.Div([
-            dcc.Dropdown(
-                id='department-dropdown',
-                options=[{'label': i, 'value': i} for i in df_sliced['department_id'].unique()],
-                value=df_sliced['department_id'].unique()[0]  # default value
-            ),
-            dcc.RadioItems(
-                id='top-n-radio',
-                options=[{'label': 'Top 5', 'value': 5}, {'label': 'Top 10', 'value': 10}],
-                value=10  # default value
-            ),
-            html.Div([
-                html.Div(id='total-orders', style={
-                    'textAlign': 'center',
-                    'color': '#28282B',
-                    'fontSize': 20,
-                    'padding': '10px',
-                    'border': '2px solid #28282B'
-                }),
-                html.Div(id='total-products', style={
-                    'textAlign': 'center',
-                    'color': '#28282B',
-                    'fontSize': 20,
-                    'padding': '10px',
-                    'border': '2px solid #28282B'
-                }),
-                html.Div(id='total-aisles', style={
-                    'textAlign': 'center',
-                    'color': '#28282B',
-                    'fontSize': 20,
-                    'padding': '10px',
-                    'border': '2px solid #28282B'
-                })
-            ], style={'display': 'flex', 'justifyContent': 'space-around'}),
-
-            dcc.Graph(id='subplots-graph')
+            html.Div(className="control-panel", children=[
+                html.Div([
+                    html.Label("Department"),
+                    dcc.Dropdown(
+                        id='department-dropdown',
+                        options=[{'label': i, 'value': i} for i in df_sliced['department_id'].unique()],
+                        value=df_sliced['department_id'].unique()[0],
+                        clearable=False,
+                    ),
+                ]),
+                html.Div([
+                    html.Label("Top N products"),
+                    dcc.RadioItems(
+                        id='dept-top-n-radio',
+                        options=[{'label': 'Top 5', 'value': 5}, {'label': 'Top 10', 'value': 10}],
+                        value=10,
+                        inline=True,
+                    ),
+                ]),
+            ]),
+            html.Div(className="metric-strip", children=[
+                html.Div(id='total-orders', className="metric-box"),
+                html.Div(id='total-products', className="metric-box"),
+                html.Div(id='total-aisles', className="metric-box"),
+            ]),
+            html.Div(className="chart-card", children=[dcc.Graph(id='subplots-graph', config={'displayModeBar': True, 'displaylogo': False})]),
         ])
     elif tab == 'tab-2':
         return html.Div([
-            dcc.Dropdown(
-                id='aisle-dropdown',
-                options=[{'label': i, 'value': i} for i in aisle_names],
-                value=aisle_names[0]
-            ),
-            dcc.RadioItems(
-                id='top-n-radio',
-                options=[{'label': i, 'value': i} for i in ['Top 5', 'Top 10', 'All']],
-                value='Top 5'
-            ),
-            dcc.Graph(id='graph')
+            html.Div(className="control-panel", children=[
+                html.Div([
+                    html.Label("Aisle"),
+                    dcc.Dropdown(
+                        id='aisle-dropdown',
+                        options=[{'label': str(i), 'value': i} for i in aisle_names],
+                        value=aisle_names[0],
+                        clearable=False,
+                    ),
+                ]),
+                html.Div([
+                    html.Label("Show"),
+                    dcc.RadioItems(
+                        id='aisle-top-n-radio',
+                        options=[{'label': i, 'value': i} for i in ['Top 5', 'Top 10', 'All']],
+                        value='Top 5',
+                        inline=True,
+                    ),
+                ]),
+            ]),
+            html.Div(className="chart-card", children=[dcc.Graph(id='graph', config={'displayModeBar': True, 'displaylogo': False})]),
         ])
     elif tab == 'tab-3':
         return html.Div([
-            html.H1("Product Insights Dashboard"),
-
-            dcc.Dropdown(
-                id='product-selector',
-                options=[{'label': product, 'value': product} for product in df['product_name'].unique()],
-                value=df['product_name'].unique()[0],  # Default selection
-            ),
-
-            html.Div([
-                dcc.Graph(id='gauge-chart', style={"display": "inline-block", "width": "50%"}),
-                dcc.Graph(id='pie-chart', style={"display": "inline-block", "width": "50%"})
+            html.H2("Product Insights", className="section-title"),
+            html.Div(className="control-panel", children=[
+                html.Div([
+                    html.Label("Product"),
+                    dcc.Dropdown(
+                        id='product-selector',
+                        options=[{'label': product, 'value': product} for product in df['product_name'].unique()],
+                        value=df['product_name'].unique()[0],
+                        clearable=False,
+                    ),
+                ]),
             ]),
-
-            html.Div([
-                dcc.Graph(id='sales-volume-chart', style={"display": "inline-block", "width": "50%"}),
-                dcc.Graph(id='cart-position-chart', style={"display": "inline-block", "width": "50%"})
+            html.Div(className="chart-row", children=[
+                html.Div(className="chart-card", children=[dcc.Graph(id='gauge-chart', config={'displayModeBar': True, 'displaylogo': False})]),
+                html.Div(className="chart-card", children=[dcc.Graph(id='pie-chart', config={'displayModeBar': True, 'displaylogo': False})]),
+            ]),
+            html.Div(className="chart-row", children=[
+                html.Div(className="chart-card", children=[dcc.Graph(id='sales-volume-chart', config={'displayModeBar': True, 'displaylogo': False})]),
+                html.Div(className="chart-card", children=[dcc.Graph(id='cart-position-chart', config={'displayModeBar': True, 'displaylogo': False})]),
             ]),
         ])
     elif tab== 'tab-4':
         return html.Div([
-            html.Div([
-                html.Div([
-                    dcc.Dropdown(
-                        id='feature-dropdown',
-                        options=dropdown_options,
-                        value='add_to_cart_order'
-                    ),
-                    dcc.Graph(id='combined-boxplot'),
-                ], style={'width': '33%', 'display': 'inline-block', 'border': 'thin lightgrey solid',
-                          'padding': '5px'}),
-
-                html.Div([
-                    dcc.Dropdown(
-                        id='normality-column',
-                        options=dropdown_options,
-                        value='days_since_prior_order'
-                    ),
-                    dcc.Dropdown(
-                        id='normality-test',
-                        options=[
-                            {'label': 'Shapiro-Wilk', 'value': 'shapiro'},
-                            {'label': 'Kolmogorov-Smirnov', 'value': 'ks'},
-                            {'label': "Anderson-Darling", 'value': 'anderson'},
-                            {'label': "D'Agostino's K-squared", 'value': 'dagostino'}
-                        ],
-                        value='shapiro'
-                    ),
-
-                    dcc.Graph(id='qq-plot'),
-                    dcc.Slider(
-                        id='slider',
-                        min=1,
-                        max=5000,
-                        step=500,
-                        value=1000,
-                        marks={i: str(i) for i in range(0, 5001, 500)}
-                    ),
-                    html.Div(id='normality-test-result', style={'font-size': '20px'}),
-                ], style={'width': '33%', 'display': 'inline-block', 'border': 'thin lightgrey solid',
-                          'padding': '5px'}),
-
-                html.Div([
-                    dcc.Dropdown(
-                        id='transformation-feature',
-                        options=dropdown_options,
-                        value='days_since_prior_order'
-                    ),
-                    dcc.RadioItems(
-                        id='transformation-type',
-                        options=[
-                            {'label': 'Log Transformation', 'value': 'log'},
-                            {'label': 'Square Root Transformation', 'value': 'sqrt'}
-                        ],
-                        value='log'
-                    ),
-                    dcc.Graph(id='transformed-data'),
-                ], style={'width': '33%', 'display': 'inline-block', 'border': 'thin lightgrey solid',
-                          'padding': '5px'}),
-            ], style={'display': 'flex', 'flex-direction': 'row', 'width': '100%', 'margin-bottom': '20px'}),
-
-            html.Div([
-                html.Div([
-                    dcc.Dropdown(
-                        id='xaxis-column',
-                        options=dropdown_options,
-                        value='order_number'
-                    ),
-                    dcc.Dropdown(
-                        id='yaxis-column',
-                        options=dropdown_options,
-                        value='days_since_prior_order'
-                    ),
-                    dcc.Checklist(
-                        id='trend-line',
-                        options=[{'label': 'Show Trend Line', 'value': 'show'}],
-                        value=[]
-                    ),
-                    dcc.Graph(id='interactive-scatter-plot'),
-                    html.Div(id='r-squared-value', style={'font-size': '20px'}),
-                ], style={'width': '50%', 'display': 'inline-block', 'border': 'thin lightgrey solid',
-                          'padding': '5px'}),
-
-                html.Div([
-                    dcc.Dropdown(
-                        id='pca-components',
-                        options=[{'label': f'{i} Components', 'value': i} for i in range(1, len(numeric_cols) + 1)],
-                        value=2
-                    ),
-                    html.Button('Perform PCA', id='perform-pca-btn', n_clicks=0),
-                    dcc.Graph(id='pca-analysis'),
-                ], style={'width': '50%', 'display': 'inline-block', 'border': 'thin lightgrey solid',
-                          'padding': '5px'}),
-            ], style={'display': 'flex', 'flex-direction': 'row', 'width': '100%', 'margin-bottom': '20px'}),
-
-            html.Div([
-                dcc.Graph(id='correlation-heatmap'),
-            ], style={'width': '100%', 'border': 'thin lightgrey solid', 'padding': '5px'}),
+            html.H2("Statistical Analysis", className="section-title"),
+            html.Div(className="chart-row", children=[
+                html.Div(className="chart-card", style={"flex": "1 1 33%"}, children=[
+                    html.Label("Feature (boxplot)", style={"display": "block", "marginBottom": "8px"}),
+                    dcc.Dropdown(id='feature-dropdown', options=dropdown_options, value='add_to_cart_order', clearable=False),
+                    dcc.Graph(id='combined-boxplot', config={'displayModeBar': True, 'displaylogo': False}),
+                ]),
+                html.Div(className="chart-card", style={"flex": "1 1 33%"}, children=[
+                    html.Label("Normality: column", style={"display": "block", "marginBottom": "8px"}),
+                    dcc.Dropdown(id='normality-column', options=dropdown_options, value='days_since_prior_order', clearable=False),
+                    dcc.Dropdown(id='normality-test', options=[
+                        {'label': 'Shapiro-Wilk', 'value': 'shapiro'}, {'label': 'Kolmogorov-Smirnov', 'value': 'ks'},
+                        {'label': "Anderson-Darling", 'value': 'anderson'}, {'label': "D'Agostino's K-squared", 'value': 'dagostino'}
+                    ], value='shapiro', clearable=False),
+                    dcc.Graph(id='qq-plot', config={'displayModeBar': True, 'displaylogo': False}),
+                    dcc.Slider(id='slider', min=1, max=5000, step=500, value=1000, marks={i: str(i) for i in range(0, 5001, 500)}),
+                    html.Div(id='normality-test-result', style={'fontSize': '14px', 'marginTop': '8px', 'color': '#64748b'}),
+                ]),
+                html.Div(className="chart-card", style={"flex": "1 1 33%"}, children=[
+                    html.Label("Transformation", style={"display": "block", "marginBottom": "8px"}),
+                    dcc.Dropdown(id='transformation-feature', options=dropdown_options, value='days_since_prior_order', clearable=False),
+                    dcc.RadioItems(id='transformation-type', options=[
+                        {'label': 'Log', 'value': 'log'}, {'label': 'Square root', 'value': 'sqrt'}
+                    ], value='log', inline=True),
+                    dcc.Graph(id='transformed-data', config={'displayModeBar': True, 'displaylogo': False}),
+                ]),
+            ]),
+            html.Div(className="chart-row", children=[
+                html.Div(className="chart-card", style={"flex": "1 1 50%"}, children=[
+                    html.Label("Scatter: X / Y", style={"display": "block", "marginBottom": "8px"}),
+                    dcc.Dropdown(id='xaxis-column', options=dropdown_options, value='order_number', clearable=False),
+                    dcc.Dropdown(id='yaxis-column', options=dropdown_options, value='days_since_prior_order', clearable=False),
+                    dcc.Checklist(id='trend-line', options=[{'label': 'Show trend line', 'value': 'show'}], value=[]),
+                    dcc.Graph(id='interactive-scatter-plot', config={'displayModeBar': True, 'displaylogo': False}),
+                    html.Div(id='r-squared-value', style={'fontSize': '14px', 'marginTop': '8px', 'color': '#64748b'}),
+                ]),
+                html.Div(className="chart-card", style={"flex": "1 1 50%"}, children=[
+                    html.Label("PCA", style={"display": "block", "marginBottom": "8px"}),
+                    dcc.Dropdown(id='pca-components', options=[{'label': f'{i} components', 'value': i} for i in range(1, len(numeric_cols) + 1)], value=2, clearable=False),
+                    html.Button('Perform PCA', id='perform-pca-btn', n_clicks=0, className="dash-button"),
+                    dcc.Graph(id='pca-analysis', config={'displayModeBar': True, 'displaylogo': False}),
+                ]),
+            ]),
+            html.Div(className="chart-card", children=[
+                dcc.Graph(id='correlation-heatmap', config={'displayModeBar': True, 'displaylogo': False}),
+            ]),
         ])
 
-                         # Add a callback for the third tab graph
+# Product Insights: run when tab is Product Insights OR when product-selector changes
 @app.callback(
     [Output('gauge-chart', 'figure'),
      Output('pie-chart', 'figure'),
      Output('sales-volume-chart', 'figure'),
      Output('cart-position-chart', 'figure')],
-    [Input('product-selector', 'value')]
+    [Input('tabs', 'value'), Input('product-selector', 'value')]
 )
-def update_graphs(selected_product):
+def update_graphs(tab_value, selected_product):
+    if tab_value != 'tab-3':
+        raise PreventUpdate
+    product_options = df['product_name'].unique()
+    if selected_product is None or selected_product not in product_options:
+        selected_product = product_options[0]
     filtered_df = df[df['product_name'] == selected_product]
+    if filtered_df.empty:
+        selected_product = product_options[0]
+        filtered_df = df[df['product_name'] == selected_product]
+    dow_labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-    # Gauge Chart: Reorder Rate
     reorder_rate = filtered_df['reordered'].mean()
     gauge_fig = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=reorder_rate,
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "Reorder Rate"},
-        gauge={'axis': {'range': [0, 1]}}
+        value=round(reorder_rate, 3),
+        number=dict(suffix="", font=dict(size=28)),
+        domain={'x': [0.1, 0.9], 'y': [0.15, 0.85]},
+        title={'text': "Reorder Rate", 'font': {'size': 14}},
+        gauge={
+            'axis': {'range': [0, 1], 'tickwidth': 1},
+            'bar': {'color': INSTACART_GREEN},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "#e2e8f0",
+            'steps': [{'range': [0, 0.33], 'color': "#f1f5f9"}, {'range': [0.33, 0.66], 'color': "#e2e8f0"}, {'range': [0.66, 1], 'color': "#cbd5e1"}],
+            'threshold': {'line': {'color': INSTACART_GREEN, 'width': 4}, 'thickness': 0.8, 'value': reorder_rate},
+        }
     ))
+    apply_theme(gauge_fig, height=280)
 
-    # Pie Chart: Sales Distribution by DOW
-    sales_dow = filtered_df.groupby('order_dow').size()
-    pie_fig = go.Figure(data=[go.Pie(labels=sales_dow.index, values=sales_dow, name='Sales DOW')])
-    pie_fig.update_layout(title_text="Sales Distribution by DOW")
+    sales_dow = filtered_df.groupby('order_dow').size().reindex(range(7), fill_value=0)
+    pie_fig = go.Figure(data=[go.Pie(
+        labels=[dow_labels[i] for i in sales_dow.index],
+        values=sales_dow.values,
+        hole=0.5,
+        marker=dict(colors=[INSTACART_GREEN, INSTACART_ORANGE, INSTACART_DARK_GREEN, INSTACART_GREEN_LIGHT, INSTACART_ORANGE_LIGHT, "#cbd5e1", "#e2e8f0"]),
+        textinfo="percent",
+        textposition="inside",
+        insidetextorientation="horizontal",
+        hovertemplate="%{label}<br>Orders: %{value}<extra></extra>",
+    )])
+    pie_fig.update_layout(title_text="Sales by Day of Week", uniformtext_minsize=10, uniformtext_mode="hide", showlegend=True, legend=dict(orientation="h", yanchor="top", y=-0.05))
+    apply_theme(pie_fig, height=280)
 
-    # Sales Volume Over Time
     sales_volume = filtered_df.groupby('order_hour_of_day').size()
-    sales_volume_fig = go.Figure(
-        data=[go.Scatter(x=sales_volume.index, y=sales_volume.values, mode='lines', name='Sales Volume')])
-    sales_volume_fig.update_layout(title_text="Sales Volume Over Time")
+    sales_volume_fig = go.Figure()
+    sales_volume_fig.add_trace(go.Scatter(
+        x=sales_volume.index, y=sales_volume.values, fill='tozeroy',
+        line=dict(color=INSTACART_GREEN, width=2), fillcolor="rgba(10, 173, 5, 0.15)",
+        name='Orders',
+    ))
+    sales_volume_fig.update_layout(title_text="Orders by Hour of Day", xaxis_title="Hour", yaxis_title="Orders")
+    apply_theme(sales_volume_fig, height=280)
 
-    # Average Add-to-Cart Order Position
     avg_cart_position = filtered_df['add_to_cart_order'].mean()
-    cart_position_fig = go.Figure(data=[go.Bar(x=[selected_product], y=[avg_cart_position], name='Avg Cart Position')])
-    cart_position_fig.update_layout(title_text="Average Add-to-Cart Order Position")
+    cart_position_fig = go.Figure(go.Indicator(
+        mode="number",
+        value=round(avg_cart_position, 1),
+        title={'text': "Avg Add-to-Cart Position", 'font': {'size': 14}},
+        number=dict(font=dict(size=36, color=INSTACART_GREEN)),
+    ))
+    cart_position_fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", margin=dict(t=60, b=40))
+    apply_theme(cart_position_fig, height=280)
 
     return gauge_fig, pie_fig, sales_volume_fig, cart_position_fig
 
 # Callbacks for updating the plot
 @app.callback(
     Output('subplots-graph', 'figure'),
-    [Input('department-dropdown', 'value'), Input('top-n-radio', 'value')]
+    [Input('department-dropdown', 'value'), Input('dept-top-n-radio', 'value')]
 )
 def update_figures(selected_department, top_n):
-    # Filter the DataFrame based on the selected department
     filtered_df = df_sliced[df_sliced['department_id'] == selected_department]
+    top_n = 10 if top_n is None else top_n
     top_products = filtered_df['product_name'].value_counts().nlargest(top_n).index
     top_products_df = filtered_df[filtered_df['product_name'].isin(top_products)]
 
-    # Creating subplots
-    fig = make_subplots(rows=2, cols=2, specs=[[{'type': 'pie'}, {'type': 'scatter'}], [{'type': 'scatter'}, {'type': 'scatter'}]], subplot_titles=("Top Products", "Reorder Rate vs. Order Count", "Order Hour Trend", "Orders by Day for Selected Department"))
+    fig = make_subplots(
+        rows=2, cols=2,
+        specs=[[{'type': 'pie'}, {'type': 'bar'}], [{'type': 'scatter'}, {'type': 'bar'}]],
+        subplot_titles=("Top products (share)", "Reorder rate by product", "Orders by hour", "Orders by day of week"),
+        vertical_spacing=0.14, horizontal_spacing=0.10,
+    )
 
-    # Plot 1: Pie Chart of top products
     top_product_counts = filtered_df['product_name'].value_counts().head(top_n)
-    fig.add_trace(go.Pie(labels=top_product_counts.index, values=top_product_counts.values), row=1, col=1)
-
-    # Plot 2: Scatter Plot of reorder rate vs frequency for top products
-    reorder_rate = top_products_df.groupby('product_name')['reordered'].mean()
-    fig.add_trace(go.Scatter(x=reorder_rate.index, y=reorder_rate.values, mode='markers', marker=dict(size=reorder_rate.values*100), text=reorder_rate.index), row=1, col=2)
-
-    # Plot 3: Line Chart showing trend over time (simulated example: order_hour_of_day)
+    # Show only percent inside; keep labels in hover to reduce clutter
+    fig.add_trace(
+        go.Pie(labels=top_product_counts.index, values=top_product_counts.values, hole=0.5,
+               marker=dict(colors=[INSTACART_GREEN, INSTACART_ORANGE, INSTACART_DARK_GREEN, INSTACART_GREEN_LIGHT, INSTACART_ORANGE_LIGHT, "#94a3b8", "#cbd5e1", "#e2e8f0", "#f1f5f9", "#f8fafc"][:top_n]),
+               textinfo="percent", textposition="inside", insidetextorientation="horizontal",
+               hovertemplate="%{label}<br>%{percent}<extra></extra>", showlegend=False),
+        row=1, col=1,
+    )
+    reorder_rate = top_products_df.groupby('product_name')['reordered'].mean().sort_values(ascending=True)
+    fig.add_trace(
+        go.Bar(y=reorder_rate.index, x=reorder_rate.values, orientation='h', marker_color=INSTACART_GREEN, showlegend=False),
+        row=1, col=2,
+    )
     order_hour_trend = filtered_df.groupby('order_hour_of_day').size()
-    fig.add_trace(go.Scatter(x=order_hour_trend.index, y=order_hour_trend.values, mode='lines'), row=2, col=1)
-
-    # Plot 4: Bar Chart showing orders by day for selected department
+    fig.add_trace(
+        go.Scatter(x=order_hour_trend.index, y=order_hour_trend.values, mode='lines+markers',
+                   line=dict(color=INSTACART_GREEN, width=2), marker=dict(size=6), showlegend=False),
+        row=2, col=1,
+    )
     order_day_trend = filtered_df.groupby('order_dow').size()
-    fig.add_trace(go.Bar(x=order_day_trend.index, y=order_day_trend.values), row=2, col=2)
+    dow_labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    fig.add_trace(
+        go.Bar(x=[dow_labels[i] for i in order_day_trend.index], y=order_day_trend.values, marker_color=INSTACART_ORANGE, showlegend=False),
+        row=2, col=2,
+    )
 
-    fig.update_layout(height=800, showlegend=False)
-    fig.update_xaxes(title_text="Day of the Week", row=2, col=2)
-    fig.update_yaxes(title_text="Number of Orders", row=2, col=2)
-
+    fig.update_xaxes(title_text="Hour", row=2, col=1)
+    fig.update_yaxes(title_text="Orders", row=2, col=1)
+    fig.update_xaxes(title_text="Day", row=2, col=2)
+    fig.update_yaxes(title_text="Orders", row=2, col=2)
+    fig.update_xaxes(title_text="Reorder rate", row=1, col=2)
+    fig.update_yaxes(title_text="", row=1, col=2)
+    apply_theme(fig, height=700)
     return fig
 
 # Callbacks for updating the numbers
@@ -379,55 +395,46 @@ def update_numbers(selected_department):
 @app.callback(
     Output('graph', 'figure'),
     Input('aisle-dropdown', 'value'),
-    Input('top-n-radio', 'value')
+    Input('aisle-top-n-radio', 'value')
 )
-def update_graph(selected_aisle, top_n):
-    # Filter the data for the selected aisle
+def update_aisle_graph(selected_aisle, top_n):
     aisle_data = df_sliced[df_sliced['aisle_id'] == selected_aisle]
+    top_n = top_n or 'Top 5'
+    n = 5 if top_n == 'Top 5' else (10 if top_n == 'Top 10' else len(aisle_data))
 
-    # Determine the number of top products to display
-    if top_n == 'Top 5':
-        n = 5
-    elif top_n == 'Top 10':
-        n = 10
-    else:
-        n = len(aisle_data)
-
-    # Define the four plots
-    # Plot 1: Order Frequency in the Aisle (Bar Plot)
     order_counts = aisle_data['product_name'].value_counts().head(n)
-    fig1 = go.Bar(x=order_counts.index, y=order_counts.values, name='Order Frequency in the Aisle')
-
-    # Plot 2: Top Reordered Products (Horizontal Bar Plot)
     top_reorders = aisle_data[aisle_data['reordered'] == 1]['product_name'].value_counts().head(n)
-    fig2 = go.Bar(x=top_reorders.index, y=top_reorders.values, name='Top Reordered Products')
-
-    # Plot 3: Distribution of Product Prices (Histogram)
-    product_prices = aisle_data['add_to_cart_order']
-    fig3 = go.Histogram(x=product_prices, name='Distribution of Product Prices')
-
-    # Plot 4: Department Contribution (Pie Chart)
+    cart_order = aisle_data['add_to_cart_order']
     department_sales = aisle_data.groupby('department_id')['order_id'].count()
-    fig4 = go.Pie(labels=department_sales.index, values=department_sales.values, name='Department Contribution')
 
-    # Create subplots
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("Order Frequency in the Aisle", "Top Reordered Products", "Distribution of Product Prices", "Department Contribution"), specs=[[{}, {}], [{}, {'type': 'domain'}]])
-
-    # Add each subplot to the figure
-    fig.add_trace(go.Bar(x=order_counts.index, y=order_counts.values, name='Order Frequency in the Aisle'), row=1, col=1)
-    fig.add_trace(go.Bar(x=top_reorders.index, y=top_reorders.values, name='Top Reordered Products'), row=1, col=2)
-    fig.add_trace(go.Histogram(x=product_prices, name='Distribution of Product Prices'), row=2, col=1)
-    fig.add_trace(go.Pie(labels=department_sales.index, values=department_sales.values, name='Department Contribution'), row=2, col=2)
-
-    # Update layout and axes
-    fig.update_layout(height=1200, width=1200, showlegend=True, title_text="Analysis of Aisles")
-    fig.update_xaxes(title_text="Product Names", row=1, col=1)
-    fig.update_yaxes(title_text="Order Frequency", row=1, col=1)
-    fig.update_xaxes(title_text="Product Names", row=1, col=2)
-    fig.update_yaxes(title_text="Top Reordered Products", row=1, col=2)
-    fig.update_xaxes(title_text="Add to Cart Order", row=2, col=1)
-    fig.update_yaxes(title_text="Distribution of Product Prices", row=2, col=1)
-
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=("Order frequency (top products)", "Top reordered products", "Add-to-cart position", "Department share"),
+        specs=[[{'type': 'bar'}, {'type': 'bar'}], [{'type': 'histogram'}, {'type': 'domain'}]],
+        vertical_spacing=0.14, horizontal_spacing=0.10,
+    )
+    fig.add_trace(
+        go.Bar(x=order_counts.values, y=order_counts.index, orientation='h', marker_color=INSTACART_GREEN, showlegend=False),
+        row=1, col=1,
+    )
+    fig.add_trace(
+        go.Bar(x=top_reorders.values, y=top_reorders.index, orientation='h', marker_color=INSTACART_ORANGE, showlegend=False),
+        row=1, col=2,
+    )
+    fig.add_trace(
+        go.Histogram(x=cart_order, nbinsx=min(30, max(10, cart_order.nunique())), marker_color=INSTACART_GREEN, showlegend=False),
+        row=2, col=1,
+    )
+    fig.add_trace(
+        go.Pie(labels=department_sales.index, values=department_sales.values, hole=0.5,
+               marker=dict(colors=[INSTACART_GREEN, INSTACART_ORANGE, INSTACART_DARK_GREEN, INSTACART_GREEN_LIGHT, INSTACART_ORANGE_LIGHT]), showlegend=False),
+        row=2, col=2,
+    )
+    fig.update_xaxes(title_text="Orders", row=1, col=1)
+    fig.update_xaxes(title_text="Reorders", row=1, col=2)
+    fig.update_xaxes(title_text="Cart position", row=2, col=1)
+    fig.update_yaxes(title_text="Count", row=2, col=1)
+    apply_theme(fig, height=800)
     return fig
 
 # Callbacks to update plots based on dropdown selections and button clicks
@@ -441,11 +448,11 @@ def update_plots(selected_feature):
     IQR = Q3 - Q1
     df_no_outliers = df[(df[selected_feature] >= (Q1 - 1.5 * IQR)) & (df[selected_feature] <= (Q3 + 1.5 * IQR))]
 
-    combined_fig = make_subplots(rows=1, cols=2, subplot_titles=(f'{selected_feature} With Outliers', f'{selected_feature} Without Outliers'))
-    combined_fig.add_trace(go.Box(y=df[selected_feature], name='With Outliers'), row=1, col=1)
-    combined_fig.add_trace(go.Box(y=df_no_outliers[selected_feature], name='Without Outliers'), row=1, col=2)
-    combined_fig.update_layout(title_text=f"Comparison of {selected_feature}", showlegend=False)
-
+    combined_fig = make_subplots(rows=1, cols=2, subplot_titles=("With outliers", "Without outliers (IQR filter)"))
+    combined_fig.add_trace(go.Box(y=df[selected_feature], name="With outliers", marker_color=INSTACART_GREEN, line_color=INSTACART_DARK_GREEN), row=1, col=1)
+    combined_fig.add_trace(go.Box(y=df_no_outliers[selected_feature], name="Filtered", marker_color=INSTACART_ORANGE, line_color=INSTACART_DARK_GREEN), row=1, col=2)
+    combined_fig.update_layout(showlegend=False)
+    apply_theme(combined_fig, height=360)
     return combined_fig
 
 @app.callback(
@@ -457,10 +464,13 @@ def update_plots(selected_feature):
 def update_pca(n_clicks, n_components):
     if n_clicks > 0:
         pca = PCA(n_components=n_components)
-        components = pca.fit_transform(df_standardized)
+        pca.fit_transform(df_standardized)
         explained_var = pca.explained_variance_ratio_
-        fig = px.bar(x=[f'PC{i+1}' for i in range(n_components)], y=explained_var[:n_components], labels={'x': 'Principal Components', 'y': 'Variance Explained'}, title=f"PCA Analysis ({n_components} Components)")
+        fig = go.Figure(go.Bar(x=[f'PC{i+1}' for i in range(n_components)], y=explained_var, marker_color=INSTACART_GREEN))
+        fig.update_layout(title_text=f"Explained variance ({n_components} components)", xaxis_title="Component", yaxis_title="Variance explained", yaxis_tickformat=".0%")
+        apply_theme(fig, height=360)
         return fig
+    return go.Figure().add_annotation(text="Click 'Perform PCA' to run", x=0.5, y=0.5, showarrow=False, font=dict(size=14))
 
 @app.callback(
     [Output('qq-plot', 'figure'),
@@ -469,31 +479,33 @@ def update_pca(n_clicks, n_components):
      Input('normality-test', 'value'),
      Input('slider', 'value')]
 )
-
-def update_graph(selected_feature, test_type, n_value):
-    data = df[selected_feature].dropna().sample(n=n_value, replace=False, random_state=1)
+def update_qq_and_test(selected_feature, test_type, n_value):
+    sample = df[selected_feature].dropna()
+    n_value = min(n_value, len(sample))
+    data = sample.sample(n=n_value, replace=False, random_state=1)
     if test_type == 'shapiro':
         stat, p = shapiro(data)
-        test_name = "Shapiro-Wilk Test"
+        test_name = "Shapiro-Wilk"
     elif test_type == 'ks':
         stat, p = kstest(data, 'norm')
-        test_name = "Kolmogorov-Smirnov Test"
+        test_name = "Kolmogorov-Smirnov"
     elif test_type == 'anderson':
         result = anderson(data)
         stat = result.statistic
-        p = result.significance_level
-        test_name = "Anderson-Darling Test"
-    else:  # D'Agostino's K-squared test
+        p = result.critical_values[2]  # approximate
+        test_name = "Anderson-Darling"
+    else:
         stat, p = normaltest(data)
-        test_name = "D'Agostino's K-squared Test"
+        test_name = "D'Agostino K²"
 
     (osm, osr), (slope, intercept, r) = stats.probplot(data, dist="norm")
-    line = go.Scatter(x=osm, y=osr * slope + intercept, mode='lines', name='Theoretical')
-    markers = go.Scatter(x=osm, y=osr, mode='markers', name='Data')
-    fig = go.Figure(data=[line, markers])
-    fig.update_layout(title=f'QQ Plot of {selected_feature}')
-
-    return fig, f"{test_name}: Statistics={stat:.2f}, p-value={p}"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=osm, y=osr * slope + intercept, mode='lines', name='Theoretical', line=dict(color="#94a3b8", dash="dash")))
+    fig.add_trace(go.Scatter(x=osm, y=osr, mode='markers', name='Data', marker=dict(color=INSTACART_GREEN, size=6, line=dict(width=0))))
+    fig.update_layout(title_text=f"Q-Q plot: {selected_feature}", xaxis_title="Theoretical quantiles", yaxis_title="Sample quantiles")
+    apply_theme(fig, height=320)
+    result_text = f"{test_name}: stat = {stat:.3f}, p = {p:.4f}"
+    return fig, result_text
 
 @app.callback(
     Output('transformed-data', 'figure'),
@@ -501,12 +513,16 @@ def update_graph(selected_feature, test_type, n_value):
      Input('transformation-type', 'value')]
 )
 def update_transformed_data(selected_feature, transformation):
-    
+    raw = df[selected_feature].dropna()
     if transformation == 'log':
-        transformation  = np.log(transformation + 1)
-    elif transformation  == 'sqrt':
-        transformation  = np.sqrt(transformation )
-    fig = px.histogram(transformation , nbins=30, title="Data Transformation")
+        transformed = np.log1p(raw)
+        title = f"Log(1 + {selected_feature})"
+    else:
+        transformed = np.sqrt(raw)
+        title = f"√{selected_feature}"
+    fig = go.Figure(go.Histogram(x=transformed, nbinsx=min(40, max(15, int(transformed.nunique() / 2))), marker_color=INSTACART_GREEN))
+    fig.update_layout(title_text=title, xaxis_title="Value", yaxis_title="Count")
+    apply_theme(fig, height=320)
     return fig
 
 # Precompute the correlation matrix
@@ -516,9 +532,14 @@ corr_matrix = df[numeric_cols].corr()
     Output('correlation-heatmap', 'figure'),
     Input('transformation-type', 'value')
 )
-def update_heatmap(value):
-    # Use the precomputed correlation matrix
-    fig = px.imshow(corr_matrix, text_auto=True, labels={'color': "Correlation"}, title="Correlation Heatmap")
+def update_heatmap(_):
+    fig = go.Figure(go.Heatmap(
+        z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.index,
+        colorscale=[[0, "#f0fdf4"], [0.5, INSTACART_GREEN_LIGHT], [1, INSTACART_GREEN]],
+        text=np.round(corr_matrix.values, 2), texttemplate="%{text}", textfont=dict(size=11),
+    ))
+    fig.update_layout(title_text="Correlation matrix", xaxis_title="", yaxis_title="")
+    apply_theme(fig, height=400)
     return fig
 
 
@@ -529,40 +550,31 @@ def update_heatmap(value):
     Input('yaxis-column', 'value'),
     Input('trend-line', 'value')
 )
-def update_graph(xaxis_column_name, yaxis_column_name, trend_line_value):
+def update_scatter(xaxis_column_name, yaxis_column_name, trend_line_value):
+    show_trend = 'show' in (trend_line_value or [])
     fig = px.scatter(
-        data_frame=data,
+        data_frame=data.sample(n=min(3000, len(data)), random_state=42),
         x=xaxis_column_name,
         y=yaxis_column_name,
-        title=f"Interactive Plot of {xaxis_column_name} vs. {yaxis_column_name}",
-        trendline="ols" if 'show' in trend_line_value else None
+        opacity=0.6,
+        trendline="ols" if show_trend else None,
     )
-
-    # Get r-squared value if trend line is shown
+    fig.update_traces(marker=dict(size=6, line=dict(width=0)), selector=dict(mode='markers'))
+    fig.update_layout(title_text=f"{xaxis_column_name} vs {yaxis_column_name}", xaxis_title=xaxis_column_name, yaxis_title=yaxis_column_name)
     r_squared = ""
-    if 'show' in trend_line_value:
-        results = px.get_trendline_results(fig)
-        r_squared = f"R-squared: {results.px_fit_results.iloc[0].rsquared:.3f}"
-
-        # Modify trend line to start from 0
-        if 'start_from_zero' in trend_line_value:
-            fig.update_traces(
-                line=dict(dash='dash'),
-                selector=dict(type='scatter', mode='lines')
-            )
-            fig.update_layout(yaxis=dict(range=[0, fig.data[0].y.max()]))
-
-        # Add R-squared value to the plot
-        fig.add_annotation(
-            x=0.5,
-            y=0.9,
-            text=r_squared,
-            showarrow=False,
-            font=dict(size=12)
-        )
-
+    if show_trend:
+        try:
+            results = px.get_trendline_results(fig)
+            r2 = results.px_fit_results.iloc[0].rsquared
+            r_squared = f"R² = {r2:.4f}"
+            fig.add_annotation(x=0.02, y=0.98, text=r_squared, xref="paper", yref="paper", showarrow=False, font=dict(size=12), bgcolor="rgba(255,255,255,0.8)")
+        except Exception:
+            pass
+    apply_theme(fig, height=360)
     return fig, r_squared
 
-# Run the app
+# Expose Flask server for Gunicorn (production deploy on Render/Railway)
+server = app.server
+
 if __name__ == '__main__':
-    app.run_server(debug=False)  # Set debug=False for production
+    app.run(debug=False, host='0.0.0.0', port=8050)
