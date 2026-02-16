@@ -1,0 +1,8 @@
+# Render Blueprint — use this so Render runs the correct start command
+# (Dashboard app lives in Dashboard.py, not app.py)
+services:
+  - type: web
+    name: instacart-dashboard
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn Dashboard:server --bind 0.0.0.0:$PORT
